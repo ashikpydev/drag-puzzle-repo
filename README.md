@@ -145,7 +145,3 @@ Tested automatically (desktop Chromium with a mock of the SurveyCTO plug-in API,
 * [Puzzle maker](extras/puzzle-maker/puzzle-maker.html)
 * [Field plug-in resources](https://github.com/surveycto/field-plug-in-resources): SurveyCTO developer documentation
 * [Using field plug-ins](https://docs.surveycto.com/02-designing-forms/03-advanced-topics/06.using-field-plug-ins.html)
-
-## License
-
-To be added by the repository owner before publishing. The sample pictures in this repository were drawn for it in code and can be reused freely with the rest of the project.
