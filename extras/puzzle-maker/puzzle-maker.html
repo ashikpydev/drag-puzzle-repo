@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drag puzzle maker</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: #f4f6f8; color: #222; }
+  header { background: #1f4e79; color: #fff; padding: 14px 20px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0 0; font-size: 13px; opacity: .92; }
+  main { display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; align-items: flex-start; }
+  .card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 14px; box-sizing: border-box; }
+  #stageCard { flex: 1 1 560px; }
+  #sideCard { flex: 0 1 430px; }
+  canvas { max-width: 100%; border: 1px solid #bbb; touch-action: none; background: #eee; display: block; }
+  label { display: block; margin: 10px 0 2px 0; font-size: 13px; font-weight: bold; }
+  label.inline { display: inline-block; font-weight: normal; margin-right: 12px; }
+  input[type=text], select { width: 100%; box-sizing: border-box; padding: 6px; font-size: 13px; }
+  input[type=range] { width: 100%; }
+  input[type=number] { width: 70px; }
+  button { padding: 8px 12px; margin: 6px 6px 0 0; border: 1px solid #1f4e79; background: #fff; color: #1f4e79; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button.primary { background: #1f4e79; color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  textarea { width: 100%; box-sizing: border-box; font-family: Consolas, monospace; font-size: 12px; }
+  .note { font-size: 12px; color: #555; margin-top: 6px; }
+  .warn { color: #b71c1c; font-size: 13px; margin-top: 6px; }
+  h2 { font-size: 15px; margin: 16px 0 4px 0; color: #1f4e79; }
+  #preview { margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Drag puzzle maker</h1>
+  <p>Load a picture, mark the gap and the wrong pieces, then download everything your SurveyCTO form needs. Works offline. Nothing is uploaded.</p>
+</header>
+<main>
+  <div class="card" id="stageCard">
+    <input type="file" id="file" accept="image/png,image/jpeg,image/gif,image/webp">
+    <div class="note">Use a complete picture (no gap). Drag the green box over the part the child must find. Drag the red boxes to the places where wrong pieces are cut from.</div>
+    <div style="margin-top:10px"><canvas id="cv" width="640" height="480"></canvas></div>
+    <div id="fileWarn" class="warn"></div>
+  </div>
+  <div class="card" id="sideCard">
+    <h2>1. Gap and pieces</h2>
+    <label>Piece width: <span id="wv">22</span>% of the picture</label>
+    <input type="range" id="w" min="8" max="45" step="0.5" value="22">
+    <label class="inline"><input type="checkbox" id="square" checked> Keep pieces square</label>
+    <div id="hRow" hidden>
+      <label>Piece height: <span id="hv">22</span>%</label>
+      <input type="range" id="h" min="8" max="45" step="0.5" value="22">
+    </div>
+    <div>
+      <button id="add" class="primary">Add wrong piece</button>
+      <button id="rem">Remove last wrong piece</button>
+    </div>
+
+    <h2>2. Item settings</h2>
+    <label for="name">Field and list name (letters, numbers, underscore)</label>
+    <input type="text" id="name" value="puzzle_1">
+    <label for="qtext">Question text (what the enumerator reads)</label>
+    <input type="text" id="qtext" value="Say: &quot;Find the missing piece.&quot;">
+    <label>Tries allowed <input type="number" id="tries" min="1" max="9" value="1"></label>
+    <label class="inline"><input type="checkbox" id="prac"> Practice item (more tries, shows the answer, demo hand)</label>
+    <label for="theme">Look</label>
+    <select id="theme">
+      <option value="sky">Sky (blue)</option>
+      <option value="forest">Forest (green)</option>
+      <option value="ocean">Ocean (deep blue)</option>
+      <option value="candy">Candy (pink)</option>
+      <option value="sunny">Sunny (orange)</option>
+    </select>
+    <label>Largest picture width to export <input type="number" id="maxpx" min="300" max="3000" step="100" value="1000"> pixels</label>
+    <div class="note">Smaller pictures load faster on tablets.</div>
+
+    <h2>3. Get your files</h2>
+    <button id="zip" class="primary" disabled>Download puzzle files (zip)</button>
+    <div id="zipMsg" class="note"></div>
+    <div id="sideWarn" class="warn"></div>
+
+    <label>Appearance column setting</label>
+    <textarea id="appearance" rows="2" readonly></textarea>
+    <label>Rows for your form (survey row, then choices rows). Paste into Excel.</label>
+    <textarea id="rows" rows="9" readonly></textarea>
+    <button id="copyRows">Copy rows</button><button id="copyApp">Copy appearance</button>
+
+    <label>What the child sees</label>
+    <canvas id="preview" width="300" height="225"></canvas>
+  </div>
+</main>
+<script>
+(function () {
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var pv = document.getElementById('preview'), pctx = pv.getContext('2d');
+  var img = null, fileName = '';
+  var gap = { x: 40, y: 35, w: 22, h: 22 };   // percent of the picture
+  var wrong = [];                              // [{x,y}] percent
+  var drag = null;
+
+  function el(id) { return document.getElementById(id); }
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function aspect() { return img ? img.naturalHeight / img.naturalWidth : 0.75; }
+
+  function baseName() {
+    var raw = String(el('name').value || 'puzzle_1').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!/^[a-z]/.test(raw)) { raw = 'p_' + raw; }
+    return raw;
+  }
+
+  function applySize() {
+    gap.w = parseFloat(el('w').value);
+    gap.h = el('square').checked ? gap.w / aspect() : parseFloat(el('h').value);
+    gap.h = Math.min(gap.h, 60);
+    el('wv').textContent = r1(gap.w);
+    el('hv').textContent = r1(gap.h);
+    el('hRow').hidden = el('square').checked;
+    clampAll();
+  }
+  function clampRect(r) {
+    r.x = Math.max(0, Math.min(100 - gap.w, r.x));
+    r.y = Math.max(0, Math.min(100 - gap.h, r.y));
+  }
+  function clampAll() { clampRect(gap); wrong.forEach(clampRect); }
+  function overlapsGap(r) {
+    return r.x < gap.x + gap.w && r.x + gap.w > gap.x && r.y < gap.y + gap.h && r.y + gap.h > gap.y;
+  }
+
+  function sizeCanvas() {
+    var w = img ? img.naturalWidth : 640, h = img ? img.naturalHeight : 480;
+    var s = Math.min(1, 640 / w);
+    cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (img) { ctx.drawImage(img, 0, 0, cv.width, cv.height); }
+    else { ctx.fillStyle = '#666'; ctx.font = '16px Arial'; ctx.fillText('Choose a picture file above', 20, 40); }
+    function box(r, color, label) {
+      var x = r.x / 100 * cv.width, y = r.y / 100 * cv.height, w = gap.w / 100 * cv.width, h = gap.h / 100 * cv.height;
+      ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.fillStyle = color + '33';
+      ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = color; ctx.font = 'bold 14px Arial'; ctx.fillText(label, x + 5, y + 17);
+    }
+    wrong.forEach(function (r, i) { box(r, '#d32f2f', String(i + 1)); });
+    box(gap, '#2e7d32', 'GAP');
+    drawPreview();
+    update();
+  }
+
+  function drawPreview() {
+    pv.height = Math.round(pv.width * aspect());
+    pctx.clearRect(0, 0, pv.width, pv.height);
+    if (!img) { return; }
+    pctx.drawImage(img, 0, 0, pv.width, pv.height);
+    var x = gap.x / 100 * pv.width, y = gap.y / 100 * pv.height, w = gap.w / 100 * pv.width, h = gap.h / 100 * pv.height;
+    pctx.fillStyle = '#fff'; pctx.fillRect(x, y, w, h);
+    pctx.strokeStyle = '#2e7d32'; pctx.setLineDash([6, 4]); pctx.lineWidth = 2; pctx.strokeRect(x, y, w, h); pctx.setLineDash([]);
+  }
+
+  /* ---------- Output text ---------- */
+
+  function appearanceText() {
+    var p = ['gap_x=' + r1(gap.x), 'gap_y=' + r1(gap.y), 'gap_w=' + r1(gap.w)];
+    if (!el('square').checked) { p.push('gap_h=' + r1(gap.h)); }
+    p.push('correct=1');
+    var tries = parseInt(el('tries').value, 10) || 1;
+    if (el('prac').checked) { p.push('practice=1'); if (tries !== 9 && tries !== 1) { p.push('tries=' + tries); } }
+    else if (tries !== 1) { p.push('tries=' + tries); }
+    if (el('theme').value !== 'sky') { p.push("theme='" + el('theme').value + "'"); }
+    return 'custom-drag-puzzle(' + p.join(', ') + ')';
+  }
+
+  function rowsText() {
+    var b = baseName();
+    var lines = [];
+    lines.push('SURVEY SHEET (one row)');
+    lines.push(['type', 'name', 'label', 'media:image', 'appearance', 'required'].join('\t'));
+    lines.push(['select_one ' + b, b, el('qtext').value, b + '_scene.png', appearanceText(), 'yes'].join('\t'));
+    lines.push('');
+    lines.push('CHOICES SHEET (rows)');
+    lines.push(['list_name', 'name', 'label', 'image'].join('\t'));
+    lines.push([b, '1', 'Correct piece', b + '_p1.png'].join('\t'));
+    wrong.forEach(function (r, i) {
+      lines.push([b, String(i + 2), 'Wrong piece ' + (i + 1), b + '_p' + (i + 2) + '.png'].join('\t'));
+    });
+    lines.push([b, '96', 'Child could not do it', ''].join('\t'));
+    lines.push([b, '97', 'Child refused', ''].join('\t'));
+    return lines.join('\n');
+  }
+
+  function update() {
+    var warn = [];
+    if (fileName && !img) { warn.push('The picture could not be read.'); }
+    if (!wrong.length) { warn.push('Add at least one wrong piece.'); }
+    wrong.forEach(function (r, i) {
+      var ix = Math.min(r.x + gap.w, gap.x + gap.w) - Math.max(r.x, gap.x);
+      var iy = Math.min(r.y + gap.h, gap.y + gap.h) - Math.max(r.y, gap.y);
+      if (ix > 0 && iy > 0 && (ix * iy) / (gap.w * gap.h) > 0.6) {
+        warn.push('Wrong piece ' + (i + 1) + ' overlaps the gap almost completely and may look like the right piece.');
+      }
+    });
+    if (wrong.length > 5) { warn.push('More than 6 pieces in total is a lot for young children.'); }
+    el('sideWarn').textContent = warn.join(' ');
+    el('appearance').value = appearanceText();
+    el('rows').value = rowsText();
+    el('zip').disabled = !img || !wrong.length;
+  }
+
+  /* ---------- Dragging boxes on the picture ---------- */
+
+  function pt(e) {
+    var b = cv.getBoundingClientRect();
+    return { x: (e.clientX - b.left) / b.width * 100, y: (e.clientY - b.top) / b.height * 100 };
+  }
+  function inside(r, p) { return p.x >= r.x && p.x <= r.x + gap.w && p.y >= r.y && p.y <= r.y + gap.h; }
+
+  cv.addEventListener('pointerdown', function (e) {
+    var p = pt(e), target = null;
+    for (var i = wrong.length - 1; i >= 0; i--) { if (inside(wrong[i], p)) { target = wrong[i]; break; } }
+    if (inside(gap, p)) { target = gap; }
+    if (!target) { return; }
+    drag = { r: target, dx: p.x - target.x, dy: p.y - target.y, id: e.pointerId };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) { return; }
+    var p = pt(e);
+    drag.r.x = p.x - drag.dx; drag.r.y = p.y - drag.dy;
+    clampRect(drag.r); draw();
+  });
+  function endDrag(e) { if (drag && e.pointerId === drag.id) { drag = null; } }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  /* ---------- Controls ---------- */
+
+  function seedWrong() {
+    var spots = [[4, 4], [70, 4], [4, 72], [70, 72], [36, 4], [36, 72]];
+    wrong = [];
+    for (var i = 0; i < spots.length && wrong.length < 3; i++) {
+      var r = { x: spots[i][0], y: spots[i][1] }; clampRect(r);
+      if (!overlapsGap(r)) { wrong.push(r); }
+    }
+  }
+
+  el('file').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) { return; }
+    fileName = f.name;
+    var base = f.name.replace(/\.[^.]*$/, '');
+    el('name').value = base.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^(?![a-z])/, 'p_');
+    var im = new Image();
+    im.onload = function () { img = im; sizeCanvas(); applySize(); seedWrong(); draw(); };
+    im.onerror = function () { img = null; draw(); };
+    im.src = URL.createObjectURL(f);
+  });
+
+  el('add').addEventListener('click', function () {
+    for (var i = 0; i < 80; i++) {
+      var r = { x: Math.random() * (100 - gap.w), y: Math.random() * (100 - gap.h) };
+      var bad = overlapsGap(r) || wrong.some(function (o) { return Math.abs(o.x - r.x) < gap.w * 0.7 && Math.abs(o.y - r.y) < gap.h * 0.7; });
+      if (!bad) { wrong.push(r); draw(); return; }
+    }
+    wrong.push({ x: 0, y: 0 }); draw();
+  });
+  el('rem').addEventListener('click', function () { wrong.pop(); draw(); });
+  ['w', 'h', 'square'].forEach(function (id) { el(id).addEventListener('input', function () { applySize(); draw(); }); });
+  ['name', 'qtext', 'tries', 'theme'].forEach(function (id) { el(id).addEventListener('input', update); });
+  el('prac').addEventListener('input', function () {
+    if (el('prac').checked && el('tries').value === '1') { el('tries').value = 9; }
+    if (!el('prac').checked && el('tries').value === '9') { el('tries').value = 1; }
+    update();
+  });
+
+  function copyFrom(id, msg) {
+    var t = el(id); t.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (navigator.clipboard) { navigator.clipboard.writeText(t.value).catch(function () { /* ignore */ }); }
+    el('zipMsg').textContent = ok ? msg : 'Select the text and copy it.';
+  }
+  el('copyRows').addEventListener('click', function () { copyFrom('rows', 'Rows copied.'); });
+  el('copyApp').addEventListener('click', function () { copyFrom('appearance', 'Appearance copied.'); });
+
+  /* ---------- Export: PNG files and a zip (no libraries) ---------- */
+
+  var crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) { c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
+        crcTable[n] = c >>> 0;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) { crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8); }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function makeZip(files) {
+    var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+    files.forEach(function (f) {
+      var name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint16(8, 0, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+      lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, f.data);
+      var ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+      ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+      ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + size;
+    });
+    var cdSize = central.reduce(function (a, p) { return a + p.length; }, 0);
+    var end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+  }
+
+  function canvasBytes(canvas) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (!blob) { reject(new Error('png failed')); return; }
+        var fr = new FileReader();
+        fr.onload = function () { resolve(new Uint8Array(fr.result)); };
+        fr.onerror = reject;
+        fr.readAsArrayBuffer(blob);
+      }, 'image/png');
+    });
+  }
+
+  function exportZip() {
+    if (!img || !wrong.length) { return; }
+    el('zipMsg').textContent = 'Preparing files...';
+    var maxpx = Math.max(300, parseInt(el('maxpx').value, 10) || 1000);
+    var s = Math.min(1, maxpx / img.naturalWidth);
+    var cw = Math.round(img.naturalWidth * s), ch = Math.round(img.naturalHeight * s);
+    var src = document.createElement('canvas'); src.width = cw; src.height = ch;
+    src.getContext('2d').drawImage(img, 0, 0, cw, ch);
+    var pwpx = Math.round(gap.w / 100 * cw), phpx = Math.round(gap.h / 100 * ch);
+    var gx = Math.round(gap.x / 100 * cw), gy = Math.round(gap.y / 100 * ch);
+    var b = baseName();
+
+    var scene = document.createElement('canvas'); scene.width = cw; scene.height = ch;
+    var sx = scene.getContext('2d');
+    sx.drawImage(src, 0, 0);
+    sx.fillStyle = '#ffffff'; sx.fillRect(gx, gy, pwpx, phpx);
+    sx.strokeStyle = '#c8c8c8'; sx.lineWidth = 2; sx.strokeRect(gx + 1, gy + 1, pwpx - 2, phpx - 2);
+
+    function crop(x, y) {
+      var c = document.createElement('canvas'); c.width = pwpx; c.height = phpx;
+      c.getContext('2d').drawImage(src, x, y, pwpx, phpx, 0, 0, pwpx, phpx);
+      return c;
+    }
+    var jobs = [{ name: b + '_scene.png', canvas: scene }, { name: b + '_p1.png', canvas: crop(gx, gy) }];
+    wrong.forEach(function (r, i) {
+      var x = Math.min(cw - pwpx, Math.max(0, Math.round(r.x / 100 * cw)));
+      var y = Math.min(ch - phpx, Math.max(0, Math.round(r.y / 100 * ch)));
+      jobs.push({ name: b + '_p' + (i + 2) + '.png', canvas: crop(x, y) });
+    });
+    Promise.all(jobs.map(function (j) { return canvasBytes(j.canvas); })).then(function (datas) {
+      var files = jobs.map(function (j, i) { return { name: j.name, data: datas[i] }; });
+      var enc = new TextEncoder();
+      files.push({ name: b + '_form_rows.txt', data: enc.encode(rowsText() + '\n') });
+      var blob = makeZip(files);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = b + '_puzzle_files.zip';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      el('zipMsg').textContent = 'Downloaded ' + a.download + ': attach the PNG files to your form and paste the rows into your form definition.';
+    }).catch(function () { el('zipMsg').textContent = 'Could not create the files. Try a smaller picture.'; });
+  }
+  el('zip').addEventListener('click', exportZip);
+
+  applySize(); draw();
+})();
+</script>
+</body>
+</html>

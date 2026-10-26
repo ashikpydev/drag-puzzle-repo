@@ -1,0 +1,363 @@
+/* Drag puzzle field plug-in: styles. Themes are set with CSS variables. */
+
+#dp-root {
+  --bg1: #bfe6ff;
+  --bg2: #eaf8ff;
+  --frame: #ffc83d;
+  --deco: #ffffff;
+  --accent: #2e9e57;
+  --glow: 46, 158, 87;
+  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#dp-root.dp-theme-forest { --bg1: #c9efc0; --bg2: #f1fbe9; --frame: #7cb342; --deco: #fffde7; --accent: #558b2f; --glow: 85, 139, 47; }
+#dp-root.dp-theme-ocean  { --bg1: #8fd3f4; --bg2: #d6f3ff; --frame: #1e88e5; --deco: #ffffff; --accent: #0277bd; --glow: 2, 119, 189; }
+#dp-root.dp-theme-candy  { --bg1: #ffd1e8; --bg2: #fff0f8; --frame: #ec407a; --deco: #ffffff; --accent: #d81b60; --glow: 216, 27, 96; }
+#dp-root.dp-theme-sunny  { --bg1: #ffe9a8; --bg2: #fff8e1; --frame: #fb8c00; --deco: #ffffff; --accent: #ef6c00; --glow: 239, 108, 0; }
+
+/* ---------- Stage and background ---------- */
+
+#dp-stage {
+  position: relative;
+  margin: 12px auto 0 auto;
+  padding: 14px;
+  box-sizing: border-box;
+  border-radius: 24px;
+  background: linear-gradient(180deg, var(--bg1), var(--bg2));
+  box-shadow: 0 0 0 4px var(--frame), 0 8px 18px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+#dp-deco {
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+#dp-deco span {
+  position: absolute;
+  bottom: -60px;
+  border-radius: 50%;
+  background: var(--deco);
+  opacity: 0.5;
+  animation: dp-drift linear infinite;
+}
+
+@keyframes dp-drift {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  10%  { opacity: 0.55; }
+  90%  { opacity: 0.55; }
+  100% { transform: translate(var(--dx, 20px), -820px); opacity: 0; }
+}
+
+#dp-game {
+  position: relative;
+  margin: 0 auto;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+}
+
+#dp-speaker {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  z-index: 80;
+  width: 46px;
+  height: 46px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  padding: 0;
+}
+
+#dp-speaker[hidden] { display: none; }
+
+/* ---------- Scene and gap ---------- */
+
+.dp-scene {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  pointer-events: none;
+  animation: dp-scene-in 0.55s ease-out backwards;
+}
+
+.dp-scene img.dp-simg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+}
+
+.dp-scene.dp-win {
+  animation: dp-jump 0.8s ease-out;
+}
+
+@keyframes dp-scene-in {
+  0%   { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes dp-jump {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.04) rotate(-0.8deg); }
+  50%  { transform: scale(0.99) rotate(0.8deg); }
+  75%  { transform: scale(1.02) rotate(-0.4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.dp-gap {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px dashed rgba(var(--glow), 0.95);
+  border-radius: 6px;
+  pointer-events: none;
+  animation: dp-glow 1.8s ease-in-out infinite;
+}
+
+.dp-gap.dp-near {
+  border-style: solid;
+  background: rgba(var(--glow), 0.15);
+  animation: none;
+  box-shadow: 0 0 0 5px rgba(var(--glow), 0.35), 0 0 24px 6px rgba(var(--glow), 0.55);
+}
+
+.dp-gap.dp-off {
+  animation: none;
+  border-color: transparent;
+}
+
+@keyframes dp-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--glow), 0.0); }
+  50%      { box-shadow: 0 0 0 6px rgba(var(--glow), 0.28), 0 0 16px 2px rgba(var(--glow), 0.4); }
+}
+
+/* ---------- Pieces ---------- */
+
+.dp-piece {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #fff;
+  cursor: grab;
+  touch-action: none;
+  transition: left 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), top 0.3s cubic-bezier(0.3, 1.3, 0.5, 1), transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  animation: dp-enter 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) backwards;
+  animation-delay: var(--delay, 0ms);
+}
+
+.dp-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  animation: dp-bob 2.8s ease-in-out infinite;
+  animation-delay: var(--bobdelay, 0ms);
+}
+
+.dp-piece img.dp-pimg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.dp-inner {
+  position: relative;
+}
+
+.dp-inner::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  border: 3px solid #2b2b2b;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.dp-piece.dp-drag {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transform: scale(1.12) rotate(-3deg);
+  cursor: grabbing;
+  box-shadow: 0 14px 22px rgba(0, 0, 0, 0.4);
+  z-index: 50;
+}
+
+.dp-piece.dp-drag .dp-inner,
+.dp-piece.dp-locked .dp-inner,
+.dp-piece.dp-placed .dp-inner {
+  animation: none;
+}
+
+.dp-piece.dp-locked {
+  cursor: default;
+  touch-action: auto;
+  box-shadow: none;
+}
+
+.dp-piece.dp-placed {
+  z-index: 5;
+  box-shadow: none;
+}
+
+.dp-piece.dp-placed.dp-right .dp-inner::after { border-color: var(--accent); }
+
+.dp-piece.dp-fade {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.dp-piece.dp-entered {
+  animation: none;
+}
+
+.dp-piece.dp-shake {
+  animation: dp-shake 0.4s ease;
+}
+
+@keyframes dp-enter {
+  0%   { transform: translateY(50px) scale(0.2) rotate(-12deg); opacity: 0; }
+  100% { transform: translateY(0) scale(1) rotate(0); opacity: 1; }
+}
+
+@keyframes dp-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@keyframes dp-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px) rotate(-2deg); }
+  40% { transform: translateX(9px) rotate(2deg); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+/* ---------- Rewards and hints ---------- */
+
+.dp-star {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 26%;
+  margin: -13% 0 0 -13%;
+  pointer-events: none;
+  z-index: 70;
+  animation: dp-star-pop 1.1s ease-out forwards;
+}
+
+.dp-star svg { display: block; width: 100%; }
+
+@keyframes dp-star-pop {
+  0%   { transform: scale(0.1) rotate(-60deg); opacity: 0; }
+  35%  { transform: scale(1.2) rotate(8deg); opacity: 1; }
+  60%  { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: scale(1.05) rotate(0); opacity: 0; }
+}
+
+.dp-confetti {
+  position: absolute;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 75;
+}
+
+.dp-hand {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  pointer-events: none;
+  z-index: 90;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.35));
+}
+
+.dp-ghost {
+  position: absolute;
+  pointer-events: none;
+  z-index: 85;
+  opacity: 0.9;
+}
+
+/* ---------- Enumerator panel and messages ---------- */
+
+#dp-enum {
+  margin-top: 14px;
+  text-align: right;
+}
+
+#dp-gear {
+  background: #eeeeee;
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+  color: #666;
+  font-size: 18px;
+  padding: 4px 10px;
+}
+
+#dp-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px dashed #bdbdbd;
+  border-radius: 8px;
+  background: #fafafa;
+  text-align: left;
+}
+
+#dp-panel[hidden] { display: none; }
+
+#dp-panel button {
+  display: block;
+  width: 100%;
+  margin: 6px 0 0 0;
+  padding: 10px;
+  font-size: 15px;
+  border: 1px solid #9e9e9e;
+  border-radius: 6px;
+  background: #fff;
+}
+
+#dp-panel button[disabled] { opacity: 0.45; }
+
+#dp-status {
+  font-size: 13px;
+  color: #555;
+  word-break: break-word;
+}
+
+#dp-problem {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #c62828;
+  background: #ffebee;
+  color: #b71c1c;
+  font-size: 13px;
+  text-align: left;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+#dp-problem[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #dp-deco span, .dp-inner, .dp-gap { animation: none; }
+}
+
+/* Landscape tablet layout: picture left, pieces in a column on the right */
+#dp-game.dp-side .dp-scene { border-radius: 14px; }

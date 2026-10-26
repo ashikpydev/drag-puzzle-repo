@@ -1,0 +1,22 @@
+<div id="dp-root">
+  <div class="label">{{{LABEL}}}</div>
+  <div class="hint">{{{HINT}}}</div>
+  <div id="dp-stage">
+    <div id="dp-deco"></div>
+    <button type="button" id="dp-speaker" aria-label="Play instruction" hidden>
+      <svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 9v6h4l5 4V5L7 9H3z" fill="#fff"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </button>
+    <div id="dp-game"></div>
+  </div>
+  <div id="dp-problem" hidden></div>
+  <div id="dp-enum">
+    <button type="button" id="dp-gear" aria-label="Enumerator options">&#9881;</button>
+    <div id="dp-panel" hidden>
+      <div id="dp-status"></div>
+      <button type="button" id="dp-cannot">Child could not do it</button>
+      <button type="button" id="dp-refuse">Child refused</button>
+      <button type="button" id="dp-restart">Restart (practice only)</button>
+    </div>
+  </div>
+  <audio id="dp-audio" preload="auto"></audio>
+</div>

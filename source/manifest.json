@@ -1,0 +1,8 @@
+{
+	"name" : "Drag puzzle",
+	"author" : "dRi",
+	"version": "1.0.0",
+	"supportedFieldTypes": ["select_one"],
+	"hideDefaultRequiredMessage": false,
+	"hideDefaultConstraintMessage": false
+}
